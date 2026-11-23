@@ -138,7 +138,10 @@ function code128Svg(text,h,mod){
 
 /* ================= camera ================= */
 var CAM={on:false,stream:null,det:null,zx:null,timer:null,cb:null};
-function camHtml(){return '<div class="cam" id="camBox"><video id="vid" playsinline muted></video><div class="aim"></div></div>';}
+function camHtml(){return '<div class="cam" id="camBox"><video id="vid" playsinline muted></video><div class="aim"></div></div><div class="muted" id="camst" style="margin:-4px 0 8px">Camera off</div>';}
+var CAMN={reads:0,mode:''};
+function camStatus(t){var e=$('camst');if(e)e.textContent=t;}
+function camRead(raw){CAMN.reads++;camStatus('Camera on ('+CAMN.mode+') · read '+CAMN.reads+': '+String(raw).replace(/[\x00-\x1f]/g,'|').slice(0,60));if(CAM.cb)CAM.cb(raw);}
 function startCam(cb){
   CAM.cb=cb;stopCam(true);
   var v=$('vid');if(!v)return;
@@ -146,16 +149,18 @@ function startCam(cb){
   (useNative?BarcodeDetector.getSupportedFormats():Promise.resolve([])).then(function(fm){
     if(useNative&&fm.indexOf('code_128')>=0){
       CAM.det=new BarcodeDetector({formats:['code_128','qr_code']});
-      return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}},audio:false}).then(function(st){
+      CAMN.mode='phone reader';
+      return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080},advanced:[{focusMode:'continuous'}]},audio:false}).then(function(st){
         CAM.stream=st;v.srcObject=st;return v.play();
-      }).then(function(){CAM.on=true;tick();});
+      }).then(function(){CAM.on=true;camStatus('Camera on (phone reader) · hold the barcode across the white box, 6-8 inches away');tick();});
     }
     return loadZx().then(function(){
       var hints=new Map();hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.QR_CODE]);
       hints.set(ZXing.DecodeHintType.ASSUME_GS1,true);hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
       CAM.zx=new ZXing.BrowserMultiFormatReader(hints,150);
-      CAM.on=true;
-      return CAM.zx.decodeFromConstraints({video:{facingMode:'environment'}},v,function(res){if(res&&CAM.cb)CAM.cb(res.getText());});
+      CAM.on=true;CAMN.mode='ZXing reader';
+      camStatus('Camera on (ZXing reader) · hold the barcode across the white box, 6-8 inches away');
+      return CAM.zx.decodeFromConstraints({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080},advanced:[{focusMode:'continuous'}]}},v,function(res){if(res)camRead(res.getText());});
     });
   }).catch(function(e){camFailed(e);});
 }
@@ -163,21 +168,21 @@ function tick(){
   if(!CAM.on||!CAM.det)return;
   var v=$('vid');if(!v){stopCam();return;}
   CAM.det.detect(v).then(function(list){
-    if(list&&list.length&&CAM.cb)CAM.cb(list[0].rawValue);
+    if(list&&list.length)camRead(list[0].rawValue);
   }).catch(function(){}).then(function(){if(CAM.on)CAM.timer=setTimeout(tick,120);});
 }
 function stopCam(keep){
   CAM.on=false;clearTimeout(CAM.timer);
   try{if(CAM.zx)CAM.zx.reset();}catch(e){}CAM.zx=null;CAM.det=null;
   if(CAM.stream){CAM.stream.getTracks().forEach(function(t){t.stop();});CAM.stream=null;}
-  var b=$('camBtn');if(b&&!keep)b.textContent='Start camera';
+  var b=$('camBtn');if(b&&!keep){b.textContent='Start camera';camStatus('Camera off');}
 }
 function loadZx(){
   if(window.ZXing)return Promise.resolve();
   return new Promise(function(ok,bad){var s=document.createElement('script');s.src='https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';s.onload=ok;s.onerror=function(){bad(new Error('Could not load the barcode reader. Check the phone has internet.'));};document.head.appendChild(s);});
 }
 function camFailed(e){
-  stopCam();
+  stopCam();camStatus('Camera error: '+String(e&&e.message||e));
   feedback(false,'Camera did not start',String(e&&e.message||e)+'\nUse "Photo" instead, or type/scan into the box below.');
 }
 /* photo fallback: take a picture of the barcode */
