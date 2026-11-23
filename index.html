@@ -144,32 +144,46 @@ function camStatus(t){var e=$('camst');if(e)e.textContent=t;}
 function camRead(raw){CAMN.reads++;camStatus('Camera on ('+CAMN.mode+') · read '+CAMN.reads+': '+String(raw).replace(/[\x00-\x1f]/g,'|').slice(0,60));if(CAM.cb)CAM.cb(raw);}
 function startCam(cb){
   CAM.cb=cb;stopCam(true);
-  var v=$('vid');if(!v)return;
-  var useNative=('BarcodeDetector' in window);
+  if(!$('vid'))return;
+  var pref='';try{pref=localStorage.getItem('wbReader')||'';}catch(e){}
+  var useNative=('BarcodeDetector' in window)&&pref!=='zxing';
   (useNative?BarcodeDetector.getSupportedFormats():Promise.resolve([])).then(function(fm){
-    if(useNative&&fm.indexOf('code_128')>=0){
-      CAM.det=new BarcodeDetector({formats:fm});   // every barcode type the phone knows; non-Weee ones are refused
-      CAMN.mode='phone reader';
-      return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080},advanced:[{focusMode:'continuous'}]},audio:false}).then(function(st){
-        CAM.stream=st;v.srcObject=st;return v.play();
-      }).then(function(){CAM.on=true;camStatus('Camera on (phone reader) · hold the barcode across the white box, 6-8 inches away');tick();});
-    }
-    return loadZx().then(function(){
-      var hints=new Map();   // all barcode types; non-Weee ones are refused
-      hints.set(ZXing.DecodeHintType.ASSUME_GS1,true);hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
-      CAM.zx=new ZXing.BrowserMultiFormatReader(hints,150);
-      CAM.on=true;CAMN.mode='ZXing reader';
-      camStatus('Camera on (ZXing reader) · hold the barcode across the white box, 6-8 inches away');
-      return CAM.zx.decodeFromConstraints({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080},advanced:[{focusMode:'continuous'}]}},v,function(res){if(res)camRead(res.getText());});
-    });
+    if(useNative&&fm.indexOf('code_128')>=0)return startNative(fm);
+    return startZx();
   }).catch(function(e){camFailed(e);});
+}
+/* Chrome's own reader (fast when it works). On some Android phones it never finds anything:
+   then after 6 seconds without a read the page switches to the ZXing reader and remembers that. */
+function startNative(fm){
+  var v=$('vid');
+  CAM.det=new BarcodeDetector({formats:fm});   // every barcode type the phone knows; non-Weee ones are refused
+  CAMN.mode='phone reader';CAMN.started=Date.now();CAMN.reads=0;
+  return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080},advanced:[{focusMode:'continuous'}]},audio:false}).then(function(st){
+    CAM.stream=st;v.srcObject=st;return v.play();
+  }).then(function(){CAM.on=true;camStatus('Camera on (phone reader) · hold the barcode across the white box, 6-8 inches away');tick();});
+}
+function startZx(){
+  var v=$('vid');
+  return loadZx().then(function(){
+    var hints=new Map();   // all barcode types; non-Weee ones are refused
+    hints.set(ZXing.DecodeHintType.ASSUME_GS1,true);hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+    CAM.zx=new ZXing.BrowserMultiFormatReader(hints,120);
+    CAM.on=true;CAMN.mode='ZXing reader';
+    camStatus('Camera on (ZXing reader) · hold the barcode across the white box, 6-8 inches away');
+    return CAM.zx.decodeFromConstraints({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080},advanced:[{focusMode:'continuous'}]}},v,function(res){if(res)camRead(res.getText());});
+  });
 }
 function tick(){
   if(!CAM.on||!CAM.det)return;
   var v=$('vid');if(!v){stopCam();return;}
+  if(!CAMN.reads&&Date.now()-CAMN.started>6000){   // the phone reader found nothing: use ZXing from now on
+    try{localStorage.setItem('wbReader','zxing');}catch(e){}
+    stopCam(true);camStatus('Switching to the ZXing reader…');
+    startZx().catch(function(e){camFailed(e);});return;
+  }
   CAM.det.detect(v).then(function(list){
     if(list&&list.length)camRead(list[0].rawValue);
-  }).catch(function(){}).then(function(){if(CAM.on)CAM.timer=setTimeout(tick,120);});
+  }).catch(function(e){CAMN.err=String(e&&e.message||e);}).then(function(){if(CAM.on&&CAM.det)CAM.timer=setTimeout(tick,120);});
 }
 function stopCam(keep){
   CAM.on=false;clearTimeout(CAM.timer);
