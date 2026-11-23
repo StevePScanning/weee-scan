@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Weee box scanning</title>
+<meta name="theme-color" content="#16211C">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+:root{--ink:#16211C;--green:#1F6B4A;--green2:#174F37;--mut:#4B6357;--line:#DCE5DF;--bg:#F4F6F3;--mint:#E3EFE8;--err:#9B1C1C;--errbg:#FDECEC;--warn:#7A5B00;--warnbg:#FFF3CD}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.4 Arial,Helvetica,sans-serif;color:var(--ink);background:var(--bg)}
+button,input,select{font:inherit}
+header{background:var(--ink);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px}
+header b{font-size:18px}header .who{margin-left:auto;font-size:13px;color:#A9C7B8;text-align:right}
+header button{background:none;border:0;color:#A9C7B8;text-decoration:underline;font-size:13px;padding:0 0 0 8px}
+.wrap{max-width:720px;margin:0 auto;padding:12px}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:13px;font-weight:bold;color:var(--mut);margin:10px 0 4px}
+input,select{width:100%;height:46px;border:1px solid #C9D6CE;border-radius:8px;padding:0 10px;background:#fff;color:var(--ink)}
+.btn{height:48px;border:0;border-radius:8px;background:var(--green);color:#fff;font-weight:bold;padding:0 16px;cursor:pointer}
+.btn.sec{background:#fff;color:var(--ink);border:1px solid #C9D6CE}.btn.red{background:#B3261E}
+.btn.small{height:36px;font-size:14px;padding:0 12px}.btn:disabled{opacity:.5}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.row>.grow{flex:1 1 160px}
+.msg{border-radius:8px;padding:10px 12px;margin:10px 0;font-size:15px;white-space:pre-line}
+.msg.err{background:var(--errbg);color:var(--err)}.msg.ok{background:var(--mint);color:var(--green2)}.msg.info{background:var(--warnbg);color:var(--warn)}
+.muted{color:var(--mut);font-size:13px}
+.olist button{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:10px}
+.olist b{font-size:18px}
+#fb{border-radius:12px;padding:14px;font-size:19px;font-weight:bold;min-height:64px;margin-bottom:10px;background:#fff;border:1px solid var(--line)}
+#fb.ok{background:#1F6B4A;color:#fff;border-color:#1F6B4A}#fb.bad{background:#B3261E;color:#fff;border-color:#B3261E}
+#fb small{display:block;font-weight:normal;font-size:14px;opacity:.9}
+.cam{position:relative;background:#000;border-radius:12px;overflow:hidden;aspect-ratio:4/3;max-height:42vh;margin:0 auto 10px}
+.cam video{width:100%;height:100%;object-fit:cover}
+.cam .aim{position:absolute;left:8%;right:8%;top:40%;bottom:40%;border:3px solid rgba(255,255,255,.8);border-radius:8px}
+.palbar{display:flex;align-items:center;gap:8px;background:var(--mint);border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.palbar b{font-size:17px}.palbar .btn{margin-left:auto}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #EEF2EF;font-size:14px;vertical-align:top}
+th{font-size:12px;color:var(--mut)}
+.full{color:var(--green);font-weight:bold}.part{color:var(--warn);font-weight:bold}
+.pend{color:var(--warn);font-size:12px}
+.x{background:#FCE8E6;color:#B3261E;border:0;border-radius:6px;height:32px;padding:0 10px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:30}
+.modal .card{width:100%;max-width:560px;margin:0;border-radius:16px 16px 0 0;max-height:88vh;overflow:auto}
+.pick button{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;margin:6px 0}
+#print{display:none}
+@media print{
+  body{background:#fff}
+  body>*:not(#print){display:none!important}
+  #print{display:block!important}
+  .pg{page-break-after:always;padding:.3in}.pg:last-child{page-break-after:auto}
+  @page{size:letter;margin:.4in}
+}
+.lab{text-align:center;border:3px solid #000;border-radius:10px;padding:24px}
+.lab .big{font-size:64px;font-weight:bold;letter-spacing:2px}
+.lab .cust{font-size:34px;font-weight:bold;margin:10px 0}
+.lab .info{font-size:24px;margin:6px 0}
+.sheet h2{margin:0 0 6px}.sheet table td,.sheet table th{font-size:14px;border-bottom:1px solid #999}
+</style>
+</head>
+<body>
+<header><b>Weee box scanning</b><div class="who" id="who"></div></header>
+<div class="wrap" id="app"></div>
+<div id="print"></div>
+<script>
+/* The sheet script's web app link (Deploy > Manage deployments > Web app URL, ends in /exec) */
+var API='PASTE_WEB_APP_URL_HERE';
+var BOOT={names:[]};
+var S={token:'',name:''},TK='ffWeeeToken';
+var O=null,LINES=[],SCANS=[],PALLETS=[],CODES={},STICKY={},Q=[],SENDING=false,LAST={t:'',at:0},HOLD=false,ALERTS=[];
+function $(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function call(fn){var a=[].slice.call(arguments,1);
+  return fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({fn:fn,args:a})})
+    .then(function(r){return r.json();}).then(function(r){return r||{ok:false,error:'No answer'};})
+    .catch(function(e){return {ok:false,error:'No connection to the sheet ('+String(e&&e.message||e)+')'};});}
+function out(r){if(r&&!r.ok&&/signed-out/.test(r.error||'')){store('');S.token='';stopCam();login('Please sign in again.');return true;}return false;}
+function store(t){try{if(t)localStorage.setItem(TK,t);else localStorage.removeItem(TK);}catch(e){}}
+function saved(){try{return localStorage.getItem(TK)||'';}catch(e){return '';}}
+function head(){$('who').innerHTML=S.token?esc(S.name)+'<button onclick="ordersView()">Orders</button><button onclick="signOut()">Sign out</button>':'';}
+function us(iso){var m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);return m?m[2]+'/'+m[3]+'/'+m[1].slice(2):String(iso||'');}
+
+/* ================= barcode reading (GS1-128) ================= */
+var GS=String.fromCharCode(29);
+var FIXED={'00':18,'01':14,'02':14,'11':6,'12':6,'13':6,'15':6,'16':6,'17':6,'20':2};
+/** Reads a Weee Box label barcode: (240) scale item code + (21) serial, plus a date (15)/(17) if there is one. */
+function parseGS1(raw,known){
+  var s=String(raw||'').replace(/^\]C1|^\]d2|^\]Q3/,'').trim(),f={};
+  if(/^\(\d{2,4}\)/.test(s)){ // printed form: (240)1021(21)1230001
+    var re=/\((\d{2,4})\)([^(]*)/g,m;while((m=re.exec(s)))f[m[1]]=m[2].replace(new RegExp(GS,'g'),'');
+  }else{
+    var i=0,guard=0;
+    while(i<s.length&&guard++<20){
+      if(s[i]===GS){i++;continue;}
+      var ai=s.substr(i,2),n=FIXED[ai];
+      if(n){f[ai]=s.substr(i+2,n);i+=2+n;continue;}
+      if(/^3\d{3}/.test(s.substr(i,4))){f[s.substr(i,4)]=s.substr(i+4,6);i+=10;continue;}
+      if(s.substr(i,3)==='240'||s.substr(i,3)==='241'){ai=s.substr(i,3);i+=3;}
+      else if(ai==='10'||ai==='21'){i+=2;}
+      else return {bad:true};
+      var end=s.indexOf(GS,i),val;
+      if(end>=0){val=s.slice(i,end);i=end+1;}
+      else if(ai==='240'){ // no separator: find where (21) starts
+        var rest=s.slice(i),cut=-1,ks=(known||[]).slice().sort(function(a,b){return b.length-a.length;});
+        for(var k=0;k<ks.length;k++)if(rest.indexOf(ks[k]+'21')===0&&rest.length>ks[k].length+2){cut=ks[k].length;break;}
+        if(cut<0)for(var p=rest.length-7;p>=1;p--)if(rest.substr(p,2)==='21'){cut=p;break;}
+        if(cut<0){val=rest;i=s.length;}else{val=rest.slice(0,cut);i+=cut;}
+      }else{val=s.slice(i);i=s.length;}
+      f[ai]=val;
+    }
+  }
+  var d=f['15']||f['17']||'';
+  return {box:(f['240']||'').trim(),serial:(f['21']||'').trim(),sellBy:gsDate(d),fields:f};
+}
+function gsDate(d){
+  if(!/^\d{6}$/.test(d))return '';
+  var y=2000+Number(d.slice(0,2)),mo=Number(d.slice(2,4)),dd=Number(d.slice(4,6));
+  if(mo<1||mo>12)return '';
+  if(dd===0)dd=new Date(y,mo,0).getDate();
+  return y+'-'+('0'+mo).slice(-2)+'-'+('0'+dd).slice(-2);
+}
+
+/* ================= Code 128 (for the pallet label) ================= */
+var C128='212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 114131 311141 411131 211412 211214 211232 2331112'.split(' ');
+function code128Codes(text){
+  var codes=[104],sum=104;
+  for(var i=0;i<text.length;i++){var v=text.charCodeAt(i)-32;if(v<0||v>94)v=0;codes.push(v);sum+=v*(i+1);}
+  codes.push(sum%103);codes.push(106);
+  return codes;
+}
+function code128Svg(text,h,mod){
+  mod=mod||3;h=h||120;var x=10*mod,bars='';
+  code128Codes(text).forEach(function(c){var p=C128[c];for(var i=0;i<p.length;i++){var w=Number(p[i])*mod;if(i%2===0)bars+='<rect x="'+x+'" y="0" width="'+w+'" height="'+h+'"/>';x+=w;}});
+  x+=10*mod;
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="'+x+'" height="'+h+'" viewBox="0 0 '+x+' '+h+'" style="max-width:100%;height:auto">'+bars+'</svg>';
+}
+
+/* ================= camera ================= */
+var CAM={on:false,stream:null,det:null,zx:null,timer:null,cb:null};
+function camHtml(){return '<div class="cam" id="camBox"><video id="vid" playsinline muted></video><div class="aim"></div></div>';}
+function startCam(cb){
+  CAM.cb=cb;stopCam(true);
+  var v=$('vid');if(!v)return;
+  var useNative=('BarcodeDetector' in window);
+  (useNative?BarcodeDetector.getSupportedFormats():Promise.resolve([])).then(function(fm){
+    if(useNative&&fm.indexOf('code_128')>=0){
+      CAM.det=new BarcodeDetector({formats:['code_128','qr_code']});
+      return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}},audio:false}).then(function(st){
+        CAM.stream=st;v.srcObject=st;return v.play();
+      }).then(function(){CAM.on=true;tick();});
+    }
+    return loadZx().then(function(){
+      var hints=new Map();hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.QR_CODE]);
+      hints.set(ZXing.DecodeHintType.ASSUME_GS1,true);hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+      CAM.zx=new ZXing.BrowserMultiFormatReader(hints,150);
+      CAM.on=true;
+      return CAM.zx.decodeFromConstraints({video:{facingMode:'environment'}},v,function(res){if(res&&CAM.cb)CAM.cb(res.getText());});
+    });
+  }).catch(function(e){camFailed(e);});
+}
+function tick(){
+  if(!CAM.on||!CAM.det)return;
+  var v=$('vid');if(!v){stopCam();return;}
+  CAM.det.detect(v).then(function(list){
+    if(list&&list.length&&CAM.cb)CAM.cb(list[0].rawValue);
+  }).catch(function(){}).then(function(){if(CAM.on)CAM.timer=setTimeout(tick,120);});
+}
+function stopCam(keep){
+  CAM.on=false;clearTimeout(CAM.timer);
+  try{if(CAM.zx)CAM.zx.reset();}catch(e){}CAM.zx=null;CAM.det=null;
+  if(CAM.stream){CAM.stream.getTracks().forEach(function(t){t.stop();});CAM.stream=null;}
+  var b=$('camBtn');if(b&&!keep)b.textContent='Start camera';
+}
+function loadZx(){
+  if(window.ZXing)return Promise.resolve();
+  return new Promise(function(ok,bad){var s=document.createElement('script');s.src='https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';s.onload=ok;s.onerror=function(){bad(new Error('Could not load the barcode reader. Check the phone has internet.'));};document.head.appendChild(s);});
+}
+function camFailed(e){
+  stopCam();
+  feedback(false,'Camera did not start',String(e&&e.message||e)+'\nUse "Photo" instead, or type/scan into the box below.');
+}
+/* photo fallback: take a picture of the barcode */
+function photoScan(input,cb){
+  var f=input.files&&input.files[0];if(!f)return;input.value='';
+  var url=URL.createObjectURL(f);
+  var done=function(t){URL.revokeObjectURL(url);if(t)cb(t);else feedback(false,'No barcode found in the photo','Hold the phone closer and keep the barcode flat.');};
+  if('BarcodeDetector' in window){
+    createImageBitmap(f).then(function(bm){return new BarcodeDetector({formats:['code_128','qr_code']}).detect(bm);})
+      .then(function(l){done(l&&l.length?l[0].rawValue:'');}).catch(function(){done('');});
+  }else loadZx().then(function(){
+    var hints=new Map();hints.set(ZXing.DecodeHintType.ASSUME_GS1,true);hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
+    return new ZXing.BrowserMultiFormatReader(hints).decodeFromImageUrl(url);
+  }).then(function(r){done(r?r.getText():'');}).catch(function(){done('');});
+}
+
+/* ================= sounds ================= */
+var AC=null;
+function beep(ok){
+  try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    [[ok?1320:220,0,ok?.09:.22],[ok?1760:180,ok?.1:.25,ok?.09:.22]].forEach(function(n){
+      var o=AC.createOscillator(),g=AC.createGain();o.frequency.value=n[0];o.type=ok?'sine':'square';g.gain.value=.25;
+      o.connect(g);g.connect(AC.destination);o.start(AC.currentTime+n[1]);o.stop(AC.currentTime+n[1]+n[2]);});
+  }catch(e){}
+  try{navigator.vibrate&&navigator.vibrate(ok?60:[200,80,200]);}catch(e){}
+}
+function feedback(ok,title,small){var f=$('fb');if(!f)return;f.className=ok?'ok':'bad';f.innerHTML=(ok?'✓ ':'✗ ')+esc(title)+(small?'<small>'+esc(small)+'</small>':'');beep(ok);}
+
+/* ================= sign in ================= */
+function login(note){
+  head();
+  var n=BOOT.names||[];
+  $('app').innerHTML='<div class="card"><h2 style="margin:0 0 4px">Sign in</h2><div class="muted">Same name and PIN as the Operations portal.</div>'+
+    (note?'<div class="msg info">'+esc(note)+'</div>':'')+
+    '<form onsubmit="return doLogin()"><label>Name</label><input id="lName" list="lNames" autocomplete="off"><datalist id="lNames">'+n.map(function(x){return '<option value="'+esc(x)+'">';}).join('')+'</datalist>'+
+    '<label>PIN</label><input id="lPin" type="password" inputmode="numeric" autocomplete="off"><div id="lMsg"></div>'+
+    '<button class="btn" id="lBtn" style="width:100%;margin-top:14px">Sign in</button></form></div>';
+}
+function doLogin(){
+  $('lBtn').disabled=true;
+  call('wbLogin',$('lName').value,$('lPin').value).then(function(r){
+    $('lBtn').disabled=false;
+    if(!r.ok){$('lMsg').innerHTML='<div class="msg err">'+esc(r.error)+'</div>';$('lPin').value='';return;}
+    S={token:r.token,name:r.name};store(r.token);ordersView();
+  });return false;
+}
+function signOut(){if(Q.length&&!confirm(Q.length+' box(es) not saved yet. Sign out anyway?'))return;stopCam();var t=S.token;S={token:'',name:''};store('');call('wbLogout',t);login();}
+
+/* ================= orders ================= */
+function ordersView(){
+  if(O&&Q.length){alert('Saving '+Q.length+' box(es) first. Try again in a moment.');flush();return;}
+  stopCam();O=null;head();
+  $('app').innerHTML='<div class="row" style="margin-bottom:10px"><h2 class="grow" style="margin:0">Weee orders</h2><button class="btn sec small" onclick="palletLookup()">Look up a pallet</button></div><div id="ol" class="muted">Loading…</div>';
+  call('wbOrders',S.token).then(function(r){
+    if(out(r))return;
+    if(!r.ok){$('ol').innerHTML='<div class="msg err">'+esc(r.error)+'</div>';return;}
+    $('ol').className='olist';
+    $('ol').innerHTML=r.orders.length?r.orders.map(function(o){
+      return '<button onclick="openOrder(\''+esc(o.id)+'\')"><b>#'+esc(o.no)+' · '+esc(o.customer)+'</b><br><span class="muted">Delivery '+esc(o.delivery)+' · '+esc(o.status)+' · '+o.scanned+' box'+(o.scanned===1?'':'es')+' scanned</span></button>';
+    }).join(''):'<div class="msg info">No open Weee orders. Enter the order first (Order entry), then scan it here.</div>';
+  });
+}
+
+/* ================= scanning an order ================= */
+function openOrder(id){
+  $('app').innerHTML='<div class="muted">Opening the order…</div>';
+  call('wbOrder',S.token,id).then(function(r){
+    if(out(r))return;
+    if(!r.ok){$('app').innerHTML='<div class="msg err">'+esc(r.error)+'</div>';return;}
+    O=r.order;LINES=r.lines;SCANS=r.scans;PALLETS=r.pallets;CODES=r.codes||{};STICKY={};ALERTS=[];
+    // boxes scanned on this phone that never reached the sheet (page closed, no signal)
+    try{Q=JSON.parse(localStorage.getItem('wbq_'+O.id)||'[]')||[];}catch(e){Q=[];}
+    Q.forEach(function(q){if(!SCANS.some(function(s){return s.key===q.box+'|'+q.serial;}))SCANS.push({key:q.box+'|'+q.serial,detailId:q.detailId,code:q.code,box:q.box,serial:q.serial,sellBy:q.sellBy,pallet:'',pending:true});});
+    scanView();if(Q.length)flush();
+  });
+}
+function openPallet(){for(var i=0;i<PALLETS.length;i++)if(PALLETS[i].status==='Open')return PALLETS[i];return null;}
+function onPallet(s){var p=openPallet();return s.pending&&!s.pallet?true:(p&&s.pallet===p.id);}
+function haveOf(d){return SCANS.filter(function(s){return s.detailId===d;}).length;}
+function scanView(){
+  head();
+  $('app').innerHTML='<div class="row" style="margin-bottom:8px"><div class="grow"><b style="font-size:19px">#'+esc(O.no)+' · '+esc(O.customer)+'</b><div class="muted">Delivery '+esc(O.delivery)+'</div></div></div>'+
+    '<div id="fb">Scan a Weee Box label.</div>'+
+    '<div id="alerts"></div>'+
+    camHtml()+
+    '<div class="row" style="margin-bottom:10px"><button class="btn grow" id="camBtn" onclick="toggleCam()">Start camera</button>'+
+    '<label class="btn sec" style="margin:0;display:flex;align-items:center;color:var(--ink)">Photo<input type="file" accept="image/*" capture="environment" style="display:none" onchange="photoScan(this,onScan)"></label></div>'+
+    '<form class="row" onsubmit="var i=$(\'man\');onScan(i.value);i.value=\'\';return false" style="margin-bottom:10px"><input id="man" class="grow" placeholder="Or type / scan with a scanner here" autocomplete="off"><button class="btn sec">Add</button></form>'+
+    '<div class="palbar" id="palbar"></div>'+
+    '<div class="card"><b>Order lines</b><span class="muted" id="sv" style="float:right"></span><table><thead><tr><th>Item</th><th>Boxes</th><th>Sell-by</th></tr></thead><tbody id="lines"></tbody></table></div>'+
+    '<div class="card"><b>Last boxes</b><table><tbody id="recent"></tbody></table></div>'+
+    '<div class="card"><b>Pallets</b><div id="pals"></div></div>';
+  render();
+}
+function render(){
+  if(!O||!$('lines'))return;
+  var p=openPallet(),n=SCANS.filter(onPallet).length;
+  $('palbar').innerHTML=(p||n?'<div><b>Pallet '+(p?p.no:(PALLETS.length+1))+' open</b><br><span class="muted">'+n+' box'+(n===1?'':'es')+' on it</span></div><button class="btn small" onclick="closePallet()" '+(n?'':'disabled')+'>Close pallet &amp; print</button>':
+    '<div><b>No pallet open</b><br><span class="muted">The next box starts pallet '+(PALLETS.length+1)+'.</span></div>');
+  $('lines').innerHTML=LINES.map(function(l){
+    var h=haveOf(l.detailId),dates={};SCANS.forEach(function(s){if(s.detailId===l.detailId)dates[us(s.sellBy)]=1;});
+    return '<tr><td><b>'+esc(l.code)+'</b> '+esc(l.desc)+(STICKY[l.code]?'<br><button class="x" style="background:#EEF1F4;color:var(--ink)" onclick="askSellBy(\''+esc(l.code)+'\',null)">Sell-by '+us(STICKY[l.code])+' · change</button>':'')+'</td>'+
+      '<td class="'+(h>=l.need?'full':h?'part':'')+'">'+h+' / '+l.need+'</td><td>'+Object.keys(dates).join('<br>')+'</td></tr>';
+  }).join('')||'<tr><td colspan="3" class="muted">This order has no lines.</td></tr>';
+  var tot=SCANS.length,need=LINES.reduce(function(a,l){return a+l.need;},0);
+  $('sv').textContent=tot+' of '+need+' boxes'+(Q.length?' · saving '+Q.length+'…':'');
+  $('recent').innerHTML=SCANS.slice(-8).reverse().map(function(s){
+    return '<tr><td><b>'+esc(s.code)+'</b> · '+esc(s.serial)+'<br><span class="muted">Sell-by '+us(s.sellBy)+(s.pallet?' · '+esc(s.pallet):'')+'</span>'+(s.pending?' <span class="pend">saving…</span>':'')+'</td>'+
+      '<td style="text-align:right">'+(s.pending?'':'<button class="x" onclick="removeBox(\''+esc(s.key)+'\')">Take off</button>')+'</td></tr>';
+  }).join('')||'<tr><td class="muted">No boxes yet.</td></tr>';
+  $('pals').innerHTML=PALLETS.filter(function(x){return x.status==='Closed';}).map(function(x){
+    return '<div class="row" style="padding:6px 0;border-bottom:1px solid #EEF2EF"><div class="grow"><b>'+esc(x.id)+'</b> · '+x.boxes+' boxes<br><span class="muted">Closed '+esc(x.closedAt)+' by '+esc(x.closedBy)+'</span></div>'+
+      '<button class="btn sec small" onclick="reprint(\''+esc(x.id)+'\')">Print</button><button class="btn sec small" onclick="reopen(\''+esc(x.id)+'\')">Reopen</button></div>';
+  }).join('')||'<div class="muted">No closed pallets yet.</div>';
+  $('alerts').innerHTML=ALERTS.map(function(a,i){return '<div class="msg err">'+esc(a)+' <button class="x" onclick="ALERTS.splice('+i+',1);render()">OK</button></div>';}).join('');
+}
+function toggleCam(){if(CAM.on){stopCam();}else{$('camBtn').textContent='Stop camera';startCam(onScan);}}
+
+/** Every barcode read lands here. Checked on the phone at once; saved to the sheet in the background. */
+function onScan(text){
+  text=String(text||'').trim();if(!text||HOLD)return;
+  var now=Date.now();
+  if(text===LAST.t&&now-LAST.at<2500)return;   // the camera sees the same label many times a second
+  LAST={t:text,at:now};
+  if(/^P\d+-\d+$/i.test(text)){showPallet(text.toUpperCase());return;}
+  var g=parseGS1(text,Object.keys(CODES));
+  if(g.bad||!g.box||!g.serial)return feedback(false,'Not a Weee Box label','This barcode has no item code + serial.');
+  var key=g.box+'|'+g.serial;
+  var dup=SCANS.filter(function(s){return s.key===key;})[0];
+  if(dup)return feedback(false,'Already scanned','Box '+g.serial+' ('+dup.code+') is already on this order.');
+  var code=CODES[g.box];
+  if(!code)return askLink(g,text);
+  accept(g,text,code);
+}
+function accept(g,raw,code){
+  var lines=LINES.filter(function(l){return l.code===code;});
+  if(!lines.length)return feedback(false,code+' is not on this order','Box refused. Put it aside.');
+  var line=lines.filter(function(l){return haveOf(l.detailId)<l.need;})[0];
+  if(!line)return feedback(false,'All boxes of '+code+' are already scanned',lines[0].desc+': '+lines.reduce(function(a,l){return a+l.need;},0)+' ordered. Box refused.');
+  var sellBy=g.sellBy||STICKY[code];
+  if(!sellBy)return askSellBy(code,function(){accept(g,raw,code);});
+  var q={cid:String(Date.now())+Math.random().toString(36).slice(2,6),box:g.box,serial:g.serial,raw:raw,sellBy:sellBy,detailId:line.detailId,code:code};
+  Q.push(q);saveQ();
+  SCANS.push({key:g.box+'|'+g.serial,detailId:line.detailId,code:code,box:g.box,serial:g.serial,sellBy:sellBy,pallet:'',pending:true,cid:q.cid});
+  var h=haveOf(line.detailId);
+  feedback(true,code+' · box '+h+' of '+line.need,line.desc+' · sell-by '+us(sellBy));
+  render();flush();
+}
+function saveQ(){try{if(O)localStorage.setItem('wbq_'+O.id,JSON.stringify(Q));}catch(e){}}
+
+/* background saving: up to 40 boxes per trip; the operator never waits for it */
+function flush(){
+  if(SENDING||!Q.length||!O)return;
+  SENDING=true;
+  var batch=Q.slice(0,40),oid=O.id;
+  call('wbSave',S.token,oid,batch.map(function(q){return{cid:q.cid,box:q.box,serial:q.serial,raw:q.raw,sellBy:q.sellBy,detailId:q.detailId};})).then(function(r){
+    SENDING=false;
+    if(out(r))return;
+    if(!O||O.id!==oid)return;
+    if(!r.ok){
+      if(/not found|no longer|Shipped/i.test(r.error||'')){ALERTS.push(r.error);Q=[];saveQ();render();return;}
+      setTimeout(flush,4000);render();return;  // no signal etc.: try again
+    }
+    var gone={};batch.forEach(function(q){gone[q.cid]=1;});
+    Q=Q.filter(function(q){return !gone[q.cid];});saveQ();
+    (r.results||[]).forEach(function(x){
+      var s=SCANS.filter(function(z){return z.cid===x.cid;})[0];if(!s)return;
+      if(x.ok){s.pending=false;s.pallet=x.pallet;s.detailId=x.detailId||s.detailId;}
+      else{SCANS.splice(SCANS.indexOf(s),1);ALERTS.push('Box '+s.serial+' ('+s.code+') was NOT added: '+x.error+' Take it off the pallet.');beep(false);}
+    });
+    if(r.pallet){var have=PALLETS.filter(function(p){return p.id===r.pallet.id;})[0];if(have){have.status='Open';}else PALLETS.push(r.pallet);}
+    render();
+    if(Q.length)flush();
+  });
+}
+setInterval(function(){if(Q.length)flush();},5000);
+
+/* ---------- a scale code seen for the first time: which item is it? ---------- */
+function askLink(g,raw){
+  HOLD=true;
+  var items={};LINES.forEach(function(l){items[l.code]=l.desc;});
+  modal('<b style="font-size:18px">New code on this label: '+esc(g.box)+'</b><div class="muted">Which item is it? This is asked once; after that the code is known.</div><div class="pick">'+
+    Object.keys(items).map(function(c){return '<button onclick="doLink(\''+esc(g.box)+'\',\''+esc(c)+'\')"><b>'+esc(c)+'</b> '+esc(items[c])+'</button>';}).join('')+
+    '</div><div class="muted">Not one of these? Then the box is not on this order.</div><button class="btn sec" style="width:100%;margin-top:8px" onclick="closeModal();feedback(false,\'Box refused\',\'Code '+esc(g.box)+' not linked.\')">Cancel</button>');
+  window._pend={g:g,raw:raw};
+}
+function doLink(box,code){
+  $('mbody').innerHTML='<div class="muted">Saving the link…</div>';
+  call('wbLink',S.token,box,code).then(function(r){
+    if(out(r))return;
+    closeModal();
+    if(!r.ok)return feedback(false,'Not linked',r.error);
+    CODES=r.codes||CODES;CODES[box]=code;
+    var p=window._pend;if(p)accept(p.g,p.raw,code);
+  });
+}
+
+/* ---------- sell-by date when the barcode has none ---------- */
+function askSellBy(code,then){
+  HOLD=true;
+  var l=LINES.filter(function(x){return x.code===code;})[0]||{desc:''};
+  modal('<b style="font-size:18px">Sell-by date for '+esc(code)+'</b><div class="muted">'+esc(l.desc)+'<br>The label barcode has no date, so type the sell-by date printed on the box. It is used for the next '+esc(code)+' boxes until you change it.</div>'+
+    '<label>Sell-by date</label><input id="sbd" type="date" value="'+esc(STICKY[code]||'')+'">'+
+    '<div class="row" style="margin-top:12px"><button class="btn grow" onclick="setSellBy(\''+esc(code)+'\')">OK</button><button class="btn sec" onclick="closeModal()">Cancel</button></div>');
+  window._sbThen=then;
+  setTimeout(function(){try{$('sbd').focus();}catch(e){}},50);
+}
+function setSellBy(code){
+  var v=$('sbd').value;if(!/^\d{4}-\d{2}-\d{2}$/.test(v)){$('sbd').focus();return;}
+  STICKY[code]=v;closeModal();render();
+  var t=window._sbThen;window._sbThen=null;if(t)t();
+}
+function modal(h){closeModal(true);var m=document.createElement('div');m.className='modal';m.id='modal';m.innerHTML='<div class="card" id="mbody">'+h+'</div>';document.body.appendChild(m);}
+function closeModal(keep){var m=$('modal');if(m)m.remove();if(!keep){HOLD=false;LAST={t:'',at:0};}}
+
+/* ---------- take a box off ---------- */
+function removeBox(key){
+  var s=SCANS.filter(function(x){return x.key===key;})[0];if(!s)return;
+  if(!confirm('Take box '+s.serial+' ('+s.code+') off the order?'))return;
+  call('wbRemove',S.token,O.id,key,'Mis-scan').then(function(r){
+    if(out(r))return;
+    if(!r.ok)return feedback(false,'Not taken off',r.error);
+    SCANS.splice(SCANS.indexOf(s),1);feedback(true,'Box '+s.serial+' taken off','It can be scanned again.');render();
+  });
+}
+
+/* ---------- pallets ---------- */
+function closePallet(){
+  if(Q.length){feedback(false,'Still saving boxes','Wait a moment and press Close again.');flush();return;}
+  var p=openPallet();if(!p)return;
+  if(!confirm('Close pallet '+p.no+' and print the pallet sheet?'))return;
+  call('wbClosePallet',S.token,O.id).then(function(r){
+    if(out(r))return;
+    if(!r.ok)return feedback(false,'Pallet not closed',r.error);
+    p.status='Closed';p.boxes=r.pallet.boxes;p.closedAt=r.pallet.closedAt;p.closedBy=r.pallet.closedBy;
+    feedback(true,'Pallet '+r.pallet.id+' closed',r.pallet.boxes+' boxes. Printing…');
+    render();printPallet(r.pallet);
+  });
+}
+function reprint(id){call('wbPallet',S.token,id).then(function(r){if(out(r))return;if(!r.ok)return feedback(false,'Not found',r.error);printPallet(r.pallet);});}
+function reopen(id){
+  if(!confirm('Reopen '+id+' to add or take off boxes? Print a new sheet when you close it again.'))return;
+  call('wbReopenPallet',S.token,O.id,id).then(function(r){if(out(r))return;if(!r.ok)return feedback(false,'Not reopened',r.error);PALLETS=r.pallets;feedback(true,id+' is open again','New boxes go onto it.');render();});
+}
+function showPallet(id){
+  HOLD=true;stopCam();
+  modal('<div class="muted">Looking up '+esc(id)+'…</div>');
+  call('wbPallet',S.token,id).then(function(r){
+    if(out(r))return;
+    if(!r.ok){$('mbody').innerHTML='<div class="msg err">'+esc(r.error)+'</div><button class="btn sec" style="width:100%" onclick="closeModal()">Close</button>';return;}
+    var p=r.pallet;
+    $('mbody').innerHTML='<b style="font-size:20px">Pallet '+esc(p.id)+'</b> <span class="muted">('+esc(p.status)+')</span><div>Order #'+esc(p.orderNo)+' · '+esc(p.customer)+'<br>Delivery '+esc(p.delivery)+' · pallet '+p.no+' of '+p.of+' · <b>'+p.boxes+' boxes</b></div>'+
+      '<table style="margin-top:8px"><thead><tr><th>Item</th><th>Sell-by</th><th>Boxes</th></tr></thead><tbody>'+p.items.map(function(i){return '<tr><td><b>'+esc(i.code)+'</b> '+esc(i.desc)+'</td><td>'+us(i.sellBy)+'</td><td>'+i.boxes+'</td></tr>';}).join('')+'</tbody></table>'+
+      '<div class="row" style="margin-top:12px"><button class="btn grow" onclick="closeModal();reprintData()">Print</button><button class="btn sec" onclick="closeModal()">Close</button></div>';
+    window._lastPallet=p;
+  });
+}
+function reprintData(){if(window._lastPallet)printPallet(window._lastPallet);}
+function palletLookup(){
+  $('app').innerHTML='<div class="row" style="margin-bottom:8px"><h2 class="grow" style="margin:0">Look up a pallet</h2><button class="btn sec small" onclick="stopCam();ordersView()">Back</button></div>'+
+    '<div id="fb">Scan the barcode on a pallet sheet.</div>'+camHtml()+
+    '<div class="row" style="margin-bottom:10px"><button class="btn grow" id="camBtn" onclick="toggleLook()">Start camera</button>'+
+    '<label class="btn sec" style="margin:0;display:flex;align-items:center;color:var(--ink)">Photo<input type="file" accept="image/*" capture="environment" style="display:none" onchange="photoScan(this,lookScan)"></label></div>'+
+    '<form class="row" onsubmit="lookScan($(\'man\').value);return false"><input id="man" class="grow" placeholder="Or type the pallet number, e.g. P1042-01" autocomplete="off"><button class="btn sec">Look up</button></form>';
+}
+function toggleLook(){if(CAM.on)stopCam();else{$('camBtn').textContent='Stop camera';startCam(lookScan);}}
+function lookScan(t){t=String(t||'').trim().toUpperCase();if(HOLD)return;if(!/^P\d+-\d+$/.test(t)){if(t)feedback(false,'Not a pallet barcode',t);return;}beep(true);showPallet(t);}
+
+/* ---------- the printout: page 1 = pallet label, page 2 = item list ---------- */
+function printPallet(p){
+  var when=p.closedAt||'';
+  $('print').innerHTML=
+    '<div class="pg"><div class="lab"><div class="info">FANCY FOODS · PALLET</div><div class="big">'+esc(p.id)+'</div>'+
+      '<div class="cust">'+esc(p.customer)+'</div>'+
+      '<div class="info">Order #'+esc(p.orderNo)+' · Delivery '+esc(p.delivery)+'</div>'+
+      '<div class="info">Pallet '+p.no+' of '+p.of+' · <b>'+p.boxes+' boxes</b></div>'+
+      '<div style="margin:22px 0">'+code128Svg(p.id,170,4)+'</div>'+
+      '<div class="info" style="font-size:16px">Closed '+esc(when)+' by '+esc(p.closedBy)+'</div></div></div>'+
+    '<div class="pg sheet"><h2>Pallet '+esc(p.id)+' · '+esc(p.customer)+'</h2>'+
+      '<div>Order #'+esc(p.orderNo)+' · Delivery '+esc(p.delivery)+' · Pallet '+p.no+' of '+p.of+' · '+p.boxes+' boxes · Closed '+esc(when)+' by '+esc(p.closedBy)+'</div>'+
+      '<div style="margin:8px 0">'+code128Svg(p.id,60,2)+'</div>'+
+      '<table><thead><tr><th>Item</th><th>Description</th><th>Sell-by (lot)</th><th>Boxes</th><th>Box serials</th></tr></thead><tbody>'+
+      p.items.map(function(i){return '<tr><td><b>'+esc(i.code)+'</b></td><td>'+esc(i.desc)+'</td><td><b>'+us(i.sellBy)+'</b></td><td>'+i.boxes+'</td><td style="font-size:11px">'+esc(i.serials.join(', '))+'</td></tr>';}).join('')+
+      '<tr><td colspan="3"><b>Total</b></td><td><b>'+p.boxes+'</b></td><td></td></tr></tbody></table></div>';
+  setTimeout(function(){window.print();},300);
+}
+
+/* ================= start ================= */
+window.addEventListener('beforeunload',function(e){if(Q.length){e.preventDefault();e.returnValue='';}});
+(function(){
+  $('app').innerHTML='<div class="muted">Connecting…</div>';
+  call('wbNames').then(function(n){
+    if(n&&n.ok)BOOT.names=n.names||[];
+    else{$('app').innerHTML='<div class="msg err">Cannot reach the sheet: '+esc(n&&n.error)+'</div><button class="btn" onclick="location.reload()">Try again</button>';return;}
+    var t=saved();if(!t)return login();
+    call('wbSession',t).then(function(r){if(r&&r.ok){S={token:r.token,name:r.name};ordersView();}else{store('');login();}});
+  });
+})();
+</script>
+</body>
+</html>
