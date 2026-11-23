@@ -148,14 +148,14 @@ function startCam(cb){
   var useNative=('BarcodeDetector' in window);
   (useNative?BarcodeDetector.getSupportedFormats():Promise.resolve([])).then(function(fm){
     if(useNative&&fm.indexOf('code_128')>=0){
-      CAM.det=new BarcodeDetector({formats:['code_128','qr_code']});
+      CAM.det=new BarcodeDetector({formats:fm});   // every barcode type the phone knows; non-Weee ones are refused
       CAMN.mode='phone reader';
       return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080},advanced:[{focusMode:'continuous'}]},audio:false}).then(function(st){
         CAM.stream=st;v.srcObject=st;return v.play();
       }).then(function(){CAM.on=true;camStatus('Camera on (phone reader) · hold the barcode across the white box, 6-8 inches away');tick();});
     }
     return loadZx().then(function(){
-      var hints=new Map();hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.CODE_128,ZXing.BarcodeFormat.QR_CODE]);
+      var hints=new Map();   // all barcode types; non-Weee ones are refused
       hints.set(ZXing.DecodeHintType.ASSUME_GS1,true);hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
       CAM.zx=new ZXing.BrowserMultiFormatReader(hints,150);
       CAM.on=true;CAMN.mode='ZXing reader';
@@ -191,7 +191,7 @@ function photoScan(input,cb){
   var url=URL.createObjectURL(f);
   var done=function(t){URL.revokeObjectURL(url);if(t)cb(t);else feedback(false,'No barcode found in the photo','Hold the phone closer and keep the barcode flat.');};
   if('BarcodeDetector' in window){
-    createImageBitmap(f).then(function(bm){return new BarcodeDetector({formats:['code_128','qr_code']}).detect(bm);})
+    createImageBitmap(f).then(function(bm){return BarcodeDetector.getSupportedFormats().then(function(fm){return new BarcodeDetector({formats:fm}).detect(bm);});})
       .then(function(l){done(l&&l.length?l[0].rawValue:'');}).catch(function(){done('');});
   }else loadZx().then(function(){
     var hints=new Map();hints.set(ZXing.DecodeHintType.ASSUME_GS1,true);hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
@@ -309,7 +309,7 @@ function onScan(text){
   LAST={t:text,at:now};
   if(/^P\d+-\d+$/i.test(text)){showPallet(text.toUpperCase());return;}
   var g=parseGS1(text,Object.keys(CODES));
-  if(g.bad||!g.box||!g.serial)return feedback(false,'Not a Weee Box label','This barcode has no item code + serial.');
+  if(g.bad||!g.box||!g.serial)return feedback(false,'Not a Weee Box label','Read: '+text.replace(/[\x00-\x1f]/g,'|').slice(0,40)+'. Box refused.');
   var key=g.box+'|'+g.serial;
   var dup=SCANS.filter(function(s){return s.key===key;})[0];
   if(dup)return feedback(false,'Already scanned','Box '+g.serial+' ('+dup.code+') is already on this order.');
