@@ -138,10 +138,33 @@ function code128Svg(text,h,mod){
 
 /* ================= camera ================= */
 var CAM={on:false,stream:null,det:null,zx:null,timer:null,cb:null};
-function camHtml(){return '<div class="cam" id="camBox"><video id="vid" playsinline muted></video><div class="aim"></div></div><div class="muted" id="camst" style="margin:-4px 0 8px">Camera off</div>';}
+function camHtml(){return '<div class="cam" id="camBox"><video id="vid" playsinline muted></video><div class="aim"></div></div><div class="row" style="margin:-4px 0 8px"><div class="muted grow" id="camst">Camera off</div><button class="btn sec small" id="zBtn" onclick="camZoom()" style="display:none">Zoom 2×</button><button class="btn sec small" id="lBtn2" onclick="camLight()" style="display:none">Light</button></div>';}
 var CAMN={reads:0,mode:''};
 function camStatus(t){var e=$('camst');if(e)e.textContent=t;}
 function camRead(raw){CAMN.reads++;camStatus('Camera on ('+CAMN.mode+') · read '+CAMN.reads+': '+String(raw).replace(/[\x00-\x1f]/g,'|').slice(0,60));if(CAM.cb)CAM.cb(raw);}
+/* The main back camera (Samsung phones list several lenses; Chrome may pick one that can't focus close). */
+function camConstraints(){
+  var base={width:{ideal:1920},height:{ideal:1080},advanced:[{focusMode:'continuous'}]};
+  return navigator.mediaDevices.enumerateDevices().then(function(ds){
+    var back=ds.filter(function(d){return d.kind==='videoinput'&&/back|rear|environment/i.test(d.label);});
+    back.sort(function(a,b){var n=function(d){var m=d.label.match(/(\d+)\s*,/)||d.label.match(/(\d+)\s*$/);return m?Number(m[1]):99;};return n(a)-n(b);});
+    if(back.length){base.deviceId={exact:back[0].deviceId};}else base.facingMode='environment';
+    return base;
+  }).catch(function(){base.facingMode='environment';return base;});
+}
+var CAMZ={levels:[1,2,3],i:1,torch:false};
+function camTrack(){var v=$('vid');var s=v&&v.srcObject;return s&&s.getVideoTracks?s.getVideoTracks()[0]:null;}
+function camAfterStart(){
+  setTimeout(function(){
+    var t=camTrack();if(!t||!t.getCapabilities)return;
+    var c=t.getCapabilities();
+    if(c.zoom){var z=Math.min(CAMZ.levels[CAMZ.i],c.zoom.max);t.applyConstraints({advanced:[{zoom:z}]}).catch(function(){});var b=$('zBtn');if(b){b.style.display='';b.textContent='Zoom '+z+'×';}}
+    if(c.torch){var l=$('lBtn2');if(l)l.style.display='';}
+    if(c.focusMode&&c.focusMode.indexOf('continuous')>=0)t.applyConstraints({advanced:[{focusMode:'continuous'}]}).catch(function(){});
+  },1500);
+}
+function camZoom(){var t=camTrack();if(!t)return;var c=t.getCapabilities?t.getCapabilities():{};if(!c.zoom)return;CAMZ.i=(CAMZ.i+1)%CAMZ.levels.length;var z=Math.min(CAMZ.levels[CAMZ.i],c.zoom.max);t.applyConstraints({advanced:[{zoom:z}]}).catch(function(){});$('zBtn').textContent='Zoom '+z+'×';}
+function camLight(){var t=camTrack();if(!t)return;CAMZ.torch=!CAMZ.torch;t.applyConstraints({advanced:[{torch:CAMZ.torch}]}).catch(function(){});$('lBtn2').textContent=CAMZ.torch?'Light off':'Light';}
 function startCam(cb){
   CAM.cb=cb;stopCam(true);
   if(!$('vid'))return;
@@ -158,9 +181,9 @@ function startNative(fm){
   var v=$('vid');
   CAM.det=new BarcodeDetector({formats:fm});   // every barcode type the phone knows; non-Weee ones are refused
   CAMN.mode='phone reader';CAMN.started=Date.now();CAMN.reads=0;
-  return navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080},advanced:[{focusMode:'continuous'}]},audio:false}).then(function(st){
+  return camConstraints().then(function(vc){return navigator.mediaDevices.getUserMedia({video:vc,audio:false});}).then(function(st){
     CAM.stream=st;v.srcObject=st;return v.play();
-  }).then(function(){CAM.on=true;camStatus('Camera on (phone reader) · hold the barcode across the white box, 6-8 inches away');tick();});
+  }).then(function(){CAM.on=true;camAfterStart();camStatus('Camera on (phone reader) · barcode across the white box, about 10 inches away');tick();});
 }
 function startZx(){
   var v=$('vid');
@@ -169,8 +192,11 @@ function startZx(){
     hints.set(ZXing.DecodeHintType.ASSUME_GS1,true);hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
     CAM.zx=new ZXing.BrowserMultiFormatReader(hints,120);
     CAM.on=true;CAMN.mode='ZXing reader';
-    camStatus('Camera on (ZXing reader) · hold the barcode across the white box, 6-8 inches away');
-    return CAM.zx.decodeFromConstraints({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080},advanced:[{focusMode:'continuous'}]}},v,function(res){if(res)camRead(res.getText());});
+    camStatus('Camera on (ZXing reader) · barcode across the white box, about 10 inches away');
+    return camConstraints().then(function(vc){
+      var p=CAM.zx.decodeFromConstraints({video:vc},v,function(res){if(res)camRead(res.getText());});
+      camAfterStart();return p;
+    });
   });
 }
 function tick(){
@@ -189,7 +215,7 @@ function stopCam(keep){
   CAM.on=false;clearTimeout(CAM.timer);
   try{if(CAM.zx)CAM.zx.reset();}catch(e){}CAM.zx=null;CAM.det=null;
   if(CAM.stream){CAM.stream.getTracks().forEach(function(t){t.stop();});CAM.stream=null;}
-  var b=$('camBtn');if(b&&!keep){b.textContent='Start camera';camStatus('Camera off');}
+  var b=$('camBtn');if(b&&!keep){b.textContent='Start camera';camStatus('Camera off');CAMZ.torch=false;['zBtn','lBtn2'].forEach(function(id){var e=$(id);if(e)e.style.display='none';});}
 }
 function loadZx(){
   if(window.ZXing)return Promise.resolve();
@@ -204,13 +230,14 @@ function photoScan(input,cb){
   var f=input.files&&input.files[0];if(!f)return;input.value='';
   var url=URL.createObjectURL(f);
   var done=function(t){URL.revokeObjectURL(url);if(t)cb(t);else feedback(false,'No barcode found in the photo','Hold the phone closer and keep the barcode flat.');};
-  if('BarcodeDetector' in window){
-    createImageBitmap(f).then(function(bm){return BarcodeDetector.getSupportedFormats().then(function(fm){return new BarcodeDetector({formats:fm}).detect(bm);});})
-      .then(function(l){done(l&&l.length?l[0].rawValue:'');}).catch(function(){done('');});
-  }else loadZx().then(function(){
+  var zx=function(){return loadZx().then(function(){
     var hints=new Map();hints.set(ZXing.DecodeHintType.ASSUME_GS1,true);hints.set(ZXing.DecodeHintType.TRY_HARDER,true);
     return new ZXing.BrowserMultiFormatReader(hints).decodeFromImageUrl(url);
-  }).then(function(r){done(r?r.getText():'');}).catch(function(){done('');});
+  }).then(function(r){done(r?r.getText():'');}).catch(function(){done('');});};
+  if('BarcodeDetector' in window){
+    createImageBitmap(f).then(function(bm){return BarcodeDetector.getSupportedFormats().then(function(fm){return new BarcodeDetector({formats:fm}).detect(bm);});})
+      .then(function(l){if(l&&l.length)done(l[0].rawValue);else zx();}).catch(function(){zx();});
+  }else zx();
 }
 
 /* ================= sounds ================= */
